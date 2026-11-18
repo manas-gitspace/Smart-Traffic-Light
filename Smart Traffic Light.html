@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Traffic Light - Intelligent Junction Simulation</title>
+  <style>
+    :root {
+      --bg-start: #0b0f19;
+      --bg-end: #14192a;
+      --glass-bg: rgba(22, 29, 44, 0.75);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --glass-shine: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-green: #10b981;
+      --accent-yellow: #f59e0b;
+      --accent-red: #ef4444;
+      --accent-blue: #3b82f6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
+                  radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.12) 0%, transparent 45%),
+                  linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: 1fr 440px;
+      gap: 20px;
+    }
+
+    @media (max-width: 1024px) {
+      .container { grid-template-columns: 1fr; }
+    }
+
+    /* Glassmorphism Card Style */
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      position: relative;
+    }
+
+    .canvas-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+
+    .header-bar h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.3px;
+    }
+
+    .stats-badge {
+      font-size: 13px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: 650px;
+      margin: 0 auto;
+      border-radius: 14px;
+      display: block;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Connection Pill */
+    .conn-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: fit-content;
+      margin-bottom: 6px;
+    }
+    .conn-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+    .conn-dot.standalone {
+      background: var(--accent-blue);
+      box-shadow: 0 0 8px var(--accent-blue);
+    }
+
+    .status-msg {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: #f8fafc;
+      min-height: 38px;
+    }
+    .sub-msg {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Glass Buttons */
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 0.8fr;
+      gap: 10px;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary {
+      background: rgba(16, 185, 129, 0.75);
+      border-color: rgba(52, 211, 153, 0.4);
+    }
+    .btn-primary:hover {
+      background: rgba(16, 185, 129, 0.9);
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-auto {
+      background: rgba(59, 130, 246, 0.65);
+      border-color: rgba(96, 165, 250, 0.4);
+    }
+    .btn-auto.active {
+      background: rgba(239, 68, 68, 0.75);
+      border-color: rgba(248, 113, 113, 0.4);
+    }
+
+    /* Lane Queue Cards */
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e2e8f0;
+      margin-bottom: 10px;
+    }
+
+    .lane-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .lane-pill {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 14px 9px 36px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      font-size: 13px;
+      transition: all 0.2s ease;
+    }
+    .lane-pill.active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+    .lane-pill.yellow {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
+    .lane-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--accent-red);
+    }
+    .lane-pill.active .lane-dot {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+    }
+    .lane-pill.yellow .lane-dot {
+      background: var(--accent-yellow);
+      box-shadow: 0 0 10px var(--accent-yellow);
+    }
+
+    .lane-name {
+      font-weight: 700;
+      color: #fff;
+    }
+    .lane-details {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .lane-details.emergency {
+      color: #fca5a5;
+      font-weight: 700;
+    }
+
+    /* Injection Rows */
+    .inject-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .inject-label {
+      width: 100px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .inject-label.amb {
+      color: #fca5a5;
+    }
+    .inject-btns {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      flex: 1;
+    }
+    .inject-btns button {
+      padding: 6px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+    .amb-btn {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fecaca;
+    }
+    .amb-btn:hover {
+      background: rgba(239, 68, 68, 0.45);
+    }
+
+    .info-box {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
+    }
+    .info-box b {
+      color: #cbd5e1;
+    }
+    .info-box code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #e2e8f0;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Simulation View -->
+    <div class="glass-card canvas-container">
+      <div class="header-bar">
+        <h2>Smart Intersection Simulation</h2>
+        <div class="stats-badge" id="statsBadge">Step 0 &nbsp;|&nbsp; 0 passed</div>
+      </div>
+      <canvas id="trafficCanvas" width="600" height="600"></canvas>
+    </div>
+
+    <!-- Controls & Analytics Dashboard -->
+    <div class="sidebar">
+      <!-- Status Card -->
+      <div class="glass-card">
+        <div class="conn-status" id="connStatus">
+          <span class="conn-dot" id="connDot"></span>
+          <span id="connText">Checking Connection...</span>
+        </div>
+        <div class="status-msg" id="statusMsg">Simulation initialized. North begins with GREEN.</div>
+        <div class="sub-msg" id="subMsg">Normal Traffic Flow</div>
+      </div>
+
+      <!-- Control Buttons -->
+      <div class="glass-card btn-group">
+        <button class="btn-primary" id="btnStep">Next Step &gt;</button>
+        <button class="btn-auto" id="btnAuto">Auto-Play (1.4s)</button>
+        <button id="btnReset">Reset</button>
+      </div>
+
+      <!-- Traffic Status & Priority Scoring -->
+      <div class="glass-card">
+        <div class="card-title">Traffic Status &amp; Smart Priority</div>
+        <div class="lane-list" id="laneList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Traffic Injection -->
+      <div class="glass-card">
+        <div class="card-title">Interactive Traffic Injection</div>
+        <div class="inject-row">
+          <div class="inject-label">+ Add Car:</div>
+          <div class="inject-btns" id="carBtns"></div>
+        </div>
+        <div class="inject-row">
+          <div class="inject-label amb">+ Ambulance:</div>
+          <div class="inject-btns" id="ambBtns"></div>
+        </div>
+      </div>
+
+      <!-- Explanation -->
+      <div class="glass-card info-box">
+        <b>How Decision Making Operates:</b><br />
+        • Dynamic Priority: <code>Score = waiting cars + 0.5 × (wait time) + 1000 (Ambulance)</code><br />
+        • The highest scoring road receives <b>GREEN</b> next.<br />
+        • Seamless signal progression: <b>GREEN → YELLOW → RED</b>.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ROAD_NAMES = ["North", "East", "South", "West"];
+    const ARRIVAL_RATES = [0.25, 0.16, 0.22, 0.12];
+    const PALETTE = ['#3b82f6', '#f59e0b', '#a855f7', '#14b8a6', '#f43f5e', '#10b981'];
+
+    // State Variables
+    let queues = [[], [], [], []];
+    let currentTick = 0;
+    let activeRoad = 0;
+    let nextRoad = 0;
+    let phase = 'GREEN';
+    let greenDuration = 0;
+    let totalCarsPassed = 0;
+    let vehicleCounter = 0;
+    let passingVehicle = null;
+    let passingFromRoad = -1;
+    let statusMessage = "North begins with GREEN. Click 'Next Step' or 'Auto-Play'.";
+    let arrivalNotification = "Normal Traffic Flow";
+    let isAutoPlaying = false;
+    let autoTimer = null;
+    let pulsePhase = 0;
+    let isConnectedToJava = false;
+
+    // Canvas Setup
+    const canvas = document.getElementById('trafficCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Element References
+    const statsBadge = document.getElementById('statsBadge');
+    const statusMsg = document.getElementById('statusMsg');
+    const subMsg = document.getElementById('subMsg');
+    const btnStep = document.getElementById('btnStep');
+    const btnAuto = document.getElementById('btnAuto');
+    const btnReset = document.getElementById('btnReset');
+    const laneList = document.getElementById('laneList');
+    const carBtns = document.getElementById('carBtns');
+    const ambBtns = document.getElementById('ambBtns');
+    const connDot = document.getElementById('connDot');
+    const connText = document.getElementById('connText');
+
+    // Setup Injection Buttons
+    ROAD_NAMES.forEach((name, d) => {
+      const bCar = document.createElement('button');
+      bCar.textContent = name[0];
+      bCar.title = `Add car to ${name}`;
+      bCar.onclick = () => injectVehicle(d, false);
+      carBtns.appendChild(bCar);
+
+      const bAmb = document.createElement('button');
+      bAmb.textContent = name[0];
+      bAmb.className = 'amb-btn';
+      bAmb.title = `Add emergency ambulance to ${name}`;
+      bAmb.onclick = () => injectVehicle(d, true);
+      ambBtns.appendChild(bAmb);
+    });
+
+    // --- Backend API Sync (if Java Server is Running) ---
+    async function checkBackendSync() {
+      try {
+        const res = await fetch('/api/state', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          applyBackendState(data);
+          if (!isConnectedToJava) {
+            isConnectedToJava = true;
+            connDot.className = 'conn-dot';
+            connText.textContent = 'Connected to Java Simulation';
+          }
+          return;
+        }
+      } catch (err) {
+        // Fallback to standalone mode
+      }
+      if (isConnectedToJava || connText.textContent === 'Checking Connection...') {
+        isConnectedToJava = false;
+        connDot.className = 'conn-dot standalone';
+        connText.textContent = 'Standalone Web Mode';
+      }
+    }
+
+    function applyBackendState(data) {
+      currentTick = data.tick;
+      activeRoad = data.activeRoad;
+      nextRoad = data.nextRoad;
+      phase = data.phase;
+      greenDuration = data.greenDuration;
+      totalCarsPassed = data.totalCarsPassed;
+      statusMessage = data.statusMessage;
+      arrivalNotification = data.arrivalNotification || "Normal Traffic Flow";
+      passingFromRoad = data.passingFromRoad;
+      passingVehicle = data.passingVehicle;
+      isAutoPlaying = data.isAutoPlaying;
+
+      queues = data.queues.map(q => q.map(v => ({
+        id: v.id,
+        isAmbulance: v.isAmbulance,
+        arrivalTick: v.arrivalTick,
+        color: v.isAmbulance ? '#ffffff' : PALETTE[v.id % PALETTE.length]
+      })));
+
+      updateUI();
+    }
+
+    async function sendAction(action, payload = {}) {
+      if (isConnectedToJava) {
+        try {
+          await fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...payload })
+          });
+          checkBackendSync();
+          return;
+        } catch (e) {}
+      }
+      // Local execution fallback
+      if (action === 'step') localStep();
+      else if (action === 'auto') localToggleAuto();
+      else if (action === 'reset') localReset();
+      else if (action === 'add') localAdd(payload.road, payload.isAmbulance);
+    }
+
+    // --- Local Simulation Logic ---
+    function localInit() {
+      queues = [[], [], [], []];
+      currentTick = 0;
+      activeRoad = 0;
+      nextRoad = 0;
+      phase = 'GREEN';
+      greenDuration = 0;
+      totalCarsPassed = 0;
+      vehicleCounter = 0;
+      passingVehicle = null;
+      passingFromRoad = -1;
+      statusMessage = "North begins with GREEN. Click 'Next Step' or 'Auto-Play'.";
+      arrivalNotification = "Normal Traffic Flow";
+
+      // Seed initial vehicles
+      localAdd(0, false);
+      localAdd(0, false);
+      localAdd(1, false);
+      localAdd(2, false);
+      localAdd(3, false);
+      updateUI();
+    }
+
+    function calculateScore(roadIndex) {
+      const q = queues[roadIndex];
+      if (!q.length) return 0;
+      const hasAmb = q.some(v => v.isAmbulance);
+      const ambBoost = hasAmb ? 1000 : 0;
+      const wait = currentTick - q[0].arrivalTick;
+      return q.length + 0.5 * wait + ambBoost;
+    }
+
+    function selectBestRoad() {
+      let best = activeRoad;
+      let maxScore = -1;
+      for (let d = 0; d < 4; d++) {
+        if (d === activeRoad && greenDuration >= 6) continue;
+        const s = calculateScore(d);
+        if (s > maxScore) {
+          maxScore = s;
+          best = d;
+        }
+      }
+      return maxScore <= 0 ? activeRoad : best;
+    }
+
+    function localStep() {
+      currentTick++;
+      passingVehicle = null;
+      passingFromRoad = -1;
+
+      // Random arrivals
+      const newArrivals = [];
+      ROAD_NAMES.forEach((name, d) => {
+        if (Math.random() < ARRIVAL_RATES[d]) {
+          queues[d].push({
+            id: ++vehicleCounter,
+            isAmbulance: false,
+            arrivalTick: currentTick,
+            color: PALETTE[vehicleCounter % PALETTE.length]
+          });
+          newArrivals.push(name);
+        }
+      });
+      arrivalNotification = newArrivals.length ? `New arrivals at: ${newArrivals.join(', ')}` : "Normal Traffic Flow";
+
+      if (phase === 'YELLOW') {
+        activeRoad = nextRoad;
+        phase = 'GREEN';
+        greenDuration = 0;
+        statusMessage = `${ROAD_NAMES[activeRoad]} signal turned GREEN. Vehicles advancing.`;
+      } else {
+        greenDuration++;
+        const best = selectBestRoad();
+        const bestHasAmb = calculateScore(best) >= 1000;
+        const currentEmpty = queues[activeRoad].length === 0;
+
+        if (best !== activeRoad && (greenDuration >= 3 || currentEmpty || (bestHasAmb && greenDuration >= 1))) {
+          phase = 'YELLOW';
+          nextRoad = best;
+          const s = calculateScore(best);
+          const scoreStr = s >= 1000 ? "AMBULANCE" : s.toFixed(1);
+          statusMessage = `${ROAD_NAMES[activeRoad]} turns YELLOW. Next: ${ROAD_NAMES[best]} (Score ${scoreStr})`;
+        } else {
+          if (queues[activeRoad].length > 0) {
+            const v = queues[activeRoad].shift();
+            passingVehicle = v;
+            passingFromRoad = activeRoad;
+            totalCarsPassed++;
+            const waited = currentTick - v.arrivalTick;
+            const type = v.isAmbulance ? "Ambulance" : "Car";
+            statusMessage = `${type} from ${ROAD_NAMES[activeRoad]} drove through (waited ${waited} steps).`;
+          } else {
+            statusMessage = `${ROAD_NAMES[activeRoad]} is GREEN, but no cars are waiting.`;
+          }
+        }
+      }
+      updateUI();
+    }
+
+    function localAdd(road, isAmbulance) {
+      queues[road].push({
+        id: ++vehicleCounter,
+        isAmbulance,
+        arrivalTick: currentTick,
+        color: isAmbulance ? '#ffffff' : PALETTE[vehicleCounter % PALETTE.length]
+      });
+      statusMessage = (isAmbulance ? "Ambulance dispatched to " : "Car added to ") + ROAD_NAMES[road] + " road.";
+      updateUI();
+    }
+
+    function localToggleAuto() {
+      isAutoPlaying = !isAutoPlaying;
+      if (isAutoPlaying) {
+        autoTimer = setInterval(localStep, 1400);
+        btnAuto.textContent = "Pause Simulation";
+        btnAuto.classList.add('active');
+      } else {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        btnAuto.textContent = "Auto-Play (1.4s)";
+        btnAuto.classList.remove('active');
+      }
+    }
+
+    function localReset() {
+      if (isAutoPlaying) localToggleAuto();
+      localInit();
+    }
+
+    function injectVehicle(road, isAmbulance) {
+      sendAction('add', { road, isAmbulance });
+    }
+
+    btnStep.onclick = () => sendAction('step');
+    btnAuto.onclick = () => sendAction('auto');
+    btnReset.onclick = () => sendAction('reset');
+
+    // --- UI Update & Rendering ---
+    function updateUI() {
+      statsBadge.textContent = `Step ${currentTick}  |  ${totalCarsPassed} passed`;
+      statusMsg.innerHTML = statusMessage;
+      subMsg.textContent = arrivalNotification;
+
+      // Update Auto-play button state
+      if (isAutoPlaying) {
+        btnAuto.textContent = "Pause Simulation";
+        btnAuto.classList.add('active');
+      } else {
+        btnAuto.textContent = "Auto-Play (1.4s)";
+        btnAuto.classList.remove('active');
+      }
+
+      // Render Lane Cards
+      laneList.innerHTML = '';
+      ROAD_NAMES.forEach((name, d) => {
+        const isActive = (d === activeRoad);
+        const pill = document.createElement('div');
+        pill.className = `lane-pill ${isActive ? (phase === 'GREEN' ? 'active' : 'yellow') : ''}`;
+
+        const score = calculateScore(d);
+        const scoreStr = score >= 1000 ? "1000+ (EMG)" : score.toFixed(1);
+        const count = queues[d].length;
+        const countStr = count === 1 ? "1 car" : `${count} cars`;
+
+        pill.innerHTML = `
+          <span class="lane-dot"></span>
+          <span class="lane-name">${name} Road</span>
+          <span class="lane-details ${score >= 1000 ? 'emergency' : ''}">${countStr} &nbsp;|&nbsp; Score: ${scoreStr}</span>
+        `;
+        laneList.appendChild(pill);
+      });
+    }
+
+    // --- Canvas 2D Rendering ---
+    function draw() {
+      pulsePhase = (pulsePhase + 0.08) % (Math.PI * 2);
+      ctx.clearRect(0, 0, 600, 600);
+
+      // 1. Roads & Intersection Grass
+      drawRoads();
+      // 2. Markings & Stop lines
+      drawMarkings();
+      // 3. Queued Vehicles
+      drawVehicles();
+      // 4. Passing Vehicle
+      if (passingVehicle && passingFromRoad !== -1) {
+        drawPassingVehicle();
+      }
+      // 5. Shaped 2D Traffic Signals with Visors & Bloom
+      drawTrafficSignals();
+
+      requestAnimationFrame(draw);
+    }
+
+    function drawRoads() {
+      // Grass background
+      ctx.fillStyle = '#14231b';
+      roundRect(ctx, 0, 0, 600, 600, 16, true, false);
+
+      // Sidewalk Curbs
+      ctx.fillStyle = '#2d3748';
+      roundRect(ctx, 10, 10, 215, 215, 14, true, false);
+      roundRect(ctx, 375, 10, 215, 215, 14, true, false);
+      roundRect(ctx, 10, 375, 215, 215, 14, true, false);
+      roundRect(ctx, 375, 375, 215, 215, 14, true, false);
+
+      // Lawn Insets
+      ctx.fillStyle = '#1a3024';
+      roundRect(ctx, 18, 18, 199, 199, 10, true, false);
+      roundRect(ctx, 383, 18, 199, 199, 10, true, false);
+      roundRect(ctx, 18, 383, 199, 199, 10, true, false);
+      roundRect(ctx, 383, 383, 199, 199, 10, true, false);
+
+      // Asphalt Roads
+      ctx.fillStyle = '#1c212b';
+      ctx.fillRect(225, 0, 150, 600);
+      ctx.fillRect(0, 225, 600, 150);
+
+      // Central Junction Box
+      ctx.fillStyle = '#202632';
+      ctx.fillRect(225, 225, 150, 150);
+
+      // Center Dashed Dividers
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([14, 12]);
+      ctx.beginPath();
+      ctx.moveTo(300, 0); ctx.lineTo(300, 215);
+      ctx.moveTo(300, 385); ctx.lineTo(300, 600);
+      ctx.moveTo(0, 300); ctx.lineTo(215, 300);
+      ctx.moveTo(385, 300); ctx.lineTo(600, 300);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawMarkings() {
+      // Zebra Crosswalks
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.55)';
+      for (let x = 232; x <= 360; x += 16) {
+        ctx.fillRect(x, 216, 9, 9);
+        ctx.fillRect(x, 375, 9, 9);
+      }
+      for (let y = 232; y <= 360; y += 16) {
+        ctx.fillRect(216, y, 9, 9);
+        ctx.fillRect(375, y, 9, 9);
+      }
+
+      // Stop Lines
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.fillRect(300, 210, 75, 5); // North
+      ctx.fillRect(225, 385, 75, 5); // South
+      ctx.fillRect(210, 300, 5, 75); // West
+      ctx.fillRect(385, 225, 5, 75); // East
+    }
+
+    function drawVehicles() {
+      queues.forEach((q, d) => {
+        const displayCount = Math.min(q.length, 4);
+        for (let i = 0; i < displayCount; i++) {
+          const pt = getVehicleSlot(d, i);
+          drawCar(pt.x, pt.y, d, q[i]);
+        }
+        if (q.length > 4) {
+          const pt = getVehicleSlot(d, 4);
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+          roundRect(ctx, pt.x - 14, pt.y - 12, 28, 24, 8, true, false);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.lineWidth = 1;
+          roundRect(ctx, pt.x - 14, pt.y - 12, 28, 24, 8, false, true);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 12px Segoe UI, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`+${q.length - 4}`, pt.x, pt.y);
+        }
+      });
+    }
+
+    function getVehicleSlot(d, i) {
+      const step = 42;
+      switch (d) {
+        case 0: return { x: 338, y: 175 - i * step };
+        case 1: return { x: 425 + i * step, y: 262 };
+        case 2: return { x: 262, y: 425 + i * step };
+        default: return { x: 175 - i * step, y: 338 };
+      }
+    }
+
+    function drawPassingVehicle() {
+      let center;
+      switch (passingFromRoad) {
+        case 0: center = { x: 338, y: 290 }; break;
+        case 1: center = { x: 310, y: 262 }; break;
+        case 2: center = { x: 262, y: 310 }; break;
+        default: center = { x: 290, y: 338 }; break;
+      }
+      drawCar(center.x, center.y, passingFromRoad, passingVehicle);
+    }
+
+    function drawCar(cx, cy, d, v) {
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      const angles = [Math.PI, -Math.PI / 2, 0, Math.PI / 2];
+      ctx.rotate(angles[d]);
+
+      const carW = 24, carH = 36;
+      const x = -carW / 2, y = -carH / 2;
+
+      // Soft Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      roundRect(ctx, x - 2, y, carW + 4, carH + 3, 10, true, false);
+
+      // Wheels
+      ctx.fillStyle = '#111827';
+      roundRect(ctx, x - 3, y + 4, 3, 8, 2, true, false);
+      roundRect(ctx, x + carW, y + 4, 3, 8, 2, true, false);
+      roundRect(ctx, x - 3, y + carH - 12, 3, 8, 2, true, false);
+      roundRect(ctx, x + carW, y + carH - 12, 3, 8, 2, true, false);
+
+      if (v.isAmbulance) {
+        // Ambulance Body
+        ctx.fillStyle = '#f8fafc';
+        roundRect(ctx, x, y, carW, carH, 6, true, false);
+
+        // Emergency side stripes
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(x + 1, y + 7, 3, carH - 14);
+        ctx.fillRect(x + carW - 4, y + 7, 3, carH - 14);
+
+        // Windshield
+        ctx.fillStyle = '#1e293b';
+        roundRect(ctx, x + 3, y + 4, carW - 6, 7, 3, true, false);
+        roundRect(ctx, x + 4, y + carH - 6, carW - 8, 4, 2, true, false);
+
+        // Red cross
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(-2, -2, 5, 12);
+        ctx.fillRect(-5, 1, 11, 5);
+
+        // Flashing Dual Beacons
+        const flash = Math.sin(pulsePhase * 4) > 0;
+        ctx.fillStyle = flash ? 'rgba(239, 68, 68, 0.9)' : 'rgba(59, 130, 246, 0.3)';
+        ctx.beginPath(); ctx.arc(-4, -5, 4, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = !flash ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.9)';
+        ctx.beginPath(); ctx.arc(4, -5, 4, 0, Math.PI * 2); ctx.fill();
+      } else {
+        // Metallic Body Gradient
+        const grad = ctx.createLinearGradient(x, y, x + carW, y + carH);
+        grad.addColorStop(0, v.color);
+        grad.addColorStop(1, shadeColor(v.color, -30));
+        ctx.fillStyle = grad;
+        roundRect(ctx, x, y, carW, carH, 8, true, false);
+
+        // Roof depression
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        roundRect(ctx, x + 3, y + 8, carW - 6, carH - 15, 4, true, false);
+
+        // Windshields
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        roundRect(ctx, x + 3, y + 5, carW - 6, 6, 3, true, false);
+        roundRect(ctx, x + 3, y + carH - 10, carW - 6, 4, 2, true, false);
+
+        // Headlights
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
+        ctx.fillRect(x + 2, y, 4, 2);
+        ctx.fillRect(x + carW - 6, y, 4, 2);
+
+        // Taillights
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+        ctx.fillRect(x + 2, y + carH - 2, 4, 2);
+        ctx.fillRect(x + carW - 6, y + carH - 2, 4, 2);
+      }
+
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, carW, carH, 7, false, true);
+
+      ctx.restore();
+    }
+
+    function drawTrafficSignals() {
+      const signalPositions = [
+        [395, 145], // North
+        [475, 195], // East
+        [205, 455], // South
+        [125, 405]  // West
+      ];
+
+      signalPositions.forEach(([x, y], d) => {
+        const isCurrent = (d === activeRoad);
+        const activeLamp = isCurrent ? (phase === 'YELLOW' ? 1 : 2) : 0;
+        renderSignalFixture(x, y, ROAD_NAMES[d], activeLamp);
+      });
+
+      // Master Intersection HUD Pill
+      const pillW = 260, pillH = 34;
+      const px = (600 - pillW) / 2, py = 12;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      roundRect(ctx, px, py, pillW, pillH, 17, true, false);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, px, py, pillW, pillH, 17, false, true);
+
+      const sigCol = (phase === 'GREEN') ? '#22c55e' : '#f59e0b';
+      const phaseTxt = (phase === 'GREEN') ? "GREEN (GO)" : "YELLOW (PREPARE)";
+
+      // Glowing dot
+      ctx.fillStyle = sigCol;
+      ctx.beginPath();
+      ctx.arc(px + 20, py + 17, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px Segoe UI, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${ROAD_NAMES[activeRoad].toUpperCase()}  -  ${phaseTxt}`, px + 36, py + 17);
+    }
+
+    function renderSignalFixture(x, y, roadName, activeLamp) {
+      ctx.save();
+      const boxW = 26, boxH = 66;
+
+      // 1. Steel Pole
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(x - 2, y - boxH / 2 + 10, 4, boxH + 15);
+
+      // 2. Drop Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      roundRect(ctx, x - boxW / 2 + 3, y - boxH / 2 + 4, boxW, boxH, 12, true, false);
+
+      // 3. High-Visibility Safety Yellow Rim Backplate
+      const bp = 5;
+      ctx.fillStyle = '#f59e0b';
+      roundRect(ctx, x - boxW / 2 - bp, y - boxH / 2 - bp, boxW + bp * 2, boxH + bp * 2, 14, true, false);
+      ctx.fillStyle = '#0f172a';
+      roundRect(ctx, x - boxW / 2 - bp + 2, y - boxH / 2 - bp + 2, boxW + (bp - 2) * 2, boxH + (bp - 2) * 2, 12, true, false);
+
+      // 4. Metallic Signal Housing
+      const hGrad = ctx.createLinearGradient(x - boxW / 2, y - boxH / 2, x + boxW / 2, y + boxH / 2);
+      hGrad.addColorStop(0, '#282f3c');
+      hGrad.addColorStop(1, '#12161e');
+      ctx.fillStyle = hGrad;
+      roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 10, true, false);
+
+      ctx.strokeStyle = '#5a6980';
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 10, false, true);
+
+      // 5. Lamps: Red (0), Yellow (1), Green (2)
+      const lampRadius = 6;
+      const lampY = [y - 19, y, y + 19];
+      const activeColors = ['#ef4444', '#f59e0b', '#22c55e'];
+      const unlitColors = ['#3c0f0f', '#37260a', '#0c2d19'];
+
+      for (let k = 0; k < 3; k++) {
+        const ly = lampY[k];
+        const isLit = (k === activeLamp);
+
+        // Visor / Hood
+        ctx.fillStyle = '#0f131a';
+        ctx.beginPath();
+        ctx.arc(x, ly - 2, lampRadius + 3, Math.PI, 0);
+        ctx.fill();
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        if (isLit) {
+          const col = activeColors[k];
+          // Radiant Bloom Glow
+          const bloom = ctx.createRadialGradient(x, ly, 2, x, ly, 16);
+          bloom.addColorStop(0, col);
+          bloom.addColorStop(0.5, col + '55');
+          bloom.addColorStop(1, 'transparent');
+          ctx.fillStyle = bloom;
+          ctx.beginPath(); ctx.arc(x, ly, 16, 0, Math.PI * 2); ctx.fill();
+
+          // Saturated Core Lens
+          ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(x, ly, lampRadius, 0, Math.PI * 2); ctx.fill();
+
+          // Specular shine
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath(); ctx.arc(x - 2, ly - 2, 1.8, 0, Math.PI * 2); ctx.fill();
+        } else {
+          // Dim unlit lens
+          ctx.fillStyle = unlitColors[k];
+          ctx.beginPath(); ctx.arc(x, ly, lampRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+          ctx.stroke();
+        }
+      }
+
+      // Direction Tag Pill
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      roundRect(ctx, x - 11, y + boxH / 2 + 8, 22, 15, 5, true, false);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      roundRect(ctx, x - 11, y + boxH / 2 + 8, 22, 15, 5, false, true);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(roadName[0], x, y + boxH / 2 + 16);
+
+      ctx.restore();
+    }
+
+    // Helper: Round Rectangle
+    function roundRect(c, x, y, w, h, r, fill, stroke) {
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath();
+      if (fill) c.fill();
+      if (stroke) c.stroke();
+    }
+
+    function shadeColor(color, percent) {
+      let num = parseInt(color.replace("#",""), 16),
+          amt = Math.round(2.55 * percent),
+          R = (num >> 16) + amt,
+          B = (num >> 8 & 0x00FF) + amt,
+          G = (num & 0x0000FF) + amt;
+      return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (B<255?B<1?0:B:255)*0x100 + (G<255?G<1?0:G:255)).toString(16).slice(1);
+    }
+
+    // Initialize
+    localInit();
+    requestAnimationFrame(draw);
+
+    // Periodically poll backend for live sync
+    setInterval(checkBackendSync, 400);
+    checkBackendSync();
+  </script>
+</body>
+</html>
